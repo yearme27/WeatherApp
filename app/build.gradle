@@ -3,6 +3,16 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// The OpenWeather API key is read from local.properties (which is git-ignored)
+// so it never lands in the repository. Add this line to local.properties:
+//   OPENWEATHER_API_KEY=your_key_here
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+def openWeatherKey = localProps.getProperty('OPENWEATHER_API_KEY', System.getenv('OPENWEATHER_API_KEY') ?: '')
+
 android {
     namespace 'com.demo.weatherapp'
     compileSdk 33
@@ -15,6 +25,8 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField "String", "OPENWEATHER_API_KEY", "\"${openWeatherKey}\""
     }
 
     buildTypes {
@@ -30,6 +42,9 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+    buildFeatures {
+        buildConfig true
+    }
 }
 
 dependencies {
@@ -41,17 +56,11 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    implementation 'com.squareup.retrofit2:retrofit:2.9.0' // use the latest version
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'
     implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
-    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1"  // for ViewModel
-    implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.5.1"  // for LiveData
-    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.5.1"  // for viewModelScope
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.5.1"
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.5.1"
+    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.5.1"
     implementation 'com.google.android.gms:play-services-location:18.0.0'
-    implementation 'com.jakewharton.retrofit:retrofit2-kotlin-coroutines-adapter:0.9.2'
-    implementation 'com.github.bumptech.glide:glide:4.13.0'  // replace with the latest version
-    annotationProcessor 'com.github.bumptech.glide:compiler:4.13.0'
-
-
-
-
+    implementation 'com.github.bumptech.glide:glide:4.13.0'
 }
