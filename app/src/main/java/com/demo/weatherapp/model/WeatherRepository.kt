@@ -1,11 +1,15 @@
 package com.demo.weatherapp.model
 
 import android.util.Log
+import com.demo.weatherapp.BuildConfig
+
 class WeatherRepository(private val apiService: WeatherApi) {
+
+    private val apiKey: String = BuildConfig.OPENWEATHER_API_KEY
 
     suspend fun getGeoLocationForCity(city: String): GeoLocationResponse? {
         try {
-            val response = apiService.getGeoLocationByName(city, limit = 1, apiKey = "5d7343fe6e75f8517e276bd751638ebc")
+            val response = apiService.getGeoLocationByName(city, limit = 1, apiKey = apiKey)
             if (response.isSuccessful) {
                 return response.body()?.firstOrNull()
             } else {
@@ -19,7 +23,7 @@ class WeatherRepository(private val apiService: WeatherApi) {
 
     suspend fun getWeatherByCoordinates(lat: Double, lon: Double): WeatherData? {
         try {
-            val response = apiService.getWeather(lat, lon, apiKey = "5d7343fe6e75f8517e276bd751638ebc")
+            val response = apiService.getWeather(lat, lon, apiKey = apiKey)
             if (response.isSuccessful) {
                 return response.body()
             } else {

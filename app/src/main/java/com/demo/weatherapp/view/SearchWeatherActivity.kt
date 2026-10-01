@@ -1,6 +1,7 @@
 package com.demo.weatherapp.view
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -19,17 +20,13 @@ import com.demo.weatherapp.model.WeatherRepository
 import com.demo.weatherapp.model.WeatherViewModelFactory
 import com.demo.weatherapp.viewmodel.WeatherViewModel
 import com.google.android.gms.location.*
-import com.jakewharton.retrofit2.adapter.kotlin.coroutines.CoroutineCallAdapterFactory
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 class SearchWeatherActivity : AppCompatActivity() {
-    //Initialize view-model
     private lateinit var viewModel: WeatherViewModel
 
-    // Declare FusedLocationProviderClient for device location
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    // Declare your views
     private lateinit var cityEditText: EditText
     private lateinit var searchButton: Button
     private lateinit var weatherDetailsLayout: LinearLayout
@@ -38,18 +35,18 @@ class SearchWeatherActivity : AppCompatActivity() {
     private lateinit var highTempTextView: TextView
     private lateinit var lowTempTextView: TextView
     private lateinit var descriptionTextView: TextView
+    private lateinit var displaySearchBox: TextView
+    private lateinit var weatherIconImageView: ImageView
 
-    // SharedPreferences for saving and retrieving the last searched city
+    // Single place where the last searched city is stored and read.
     private val sharedPref by lazy {
-        getSharedPreferences("weather_app_prefs", Context.MODE_PRIVATE)
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_search_weather)
 
-
-        // Bind your views
         cityEditText = findViewById(R.id.cityEditText)
         searchButton = findViewById(R.id.searchButton)
         weatherDetailsLayout = findViewById(R.id.weatherDetailsLayout)
@@ -58,129 +55,116 @@ class SearchWeatherActivity : AppCompatActivity() {
         lowTempTextView = findViewById(R.id.lowTempTextView)
         descriptionView = findViewById(R.id.desc)
         descriptionTextView = findViewById(R.id.descriptionTextView)
+        displaySearchBox = findViewById(R.id.displaySearchBox)
+        weatherIconImageView = findViewById(R.id.weatherIconImageView)
 
-        //Initialize and bind view
-        val displaySearchBox = findViewById<TextView>(R.id.displaySearchBox)
-        val weatherIconImageView = findViewById<ImageView>(R.id.weatherIconImageView)
-
-        // Initialize FusedLocationProviderClient
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        // Load the last searched city upon app launch
-        cityEditText.text = Editable.Factory.getInstance().newEditable(getLastSearchedCity())
+        val savedCity = getLastSearchedCity()
+        cityEditText.text = Editable.Factory.getInstance().newEditable(savedCity)
 
-        // Initialize the Retrofit instance
         val retrofit = Retrofit.Builder()
             .baseUrl("https://api.openweathermap.org/")
             .addConverterFactory(GsonConverterFactory.create())
-            .addCallAdapterFactory(CoroutineCallAdapterFactory())
             .build()
 
-        // Create the WeatherApi service
         val weatherApiService = retrofit.create(WeatherApi::class.java)
-
-        // Now, create the repository using the initialized WeatherApi service
         val repository = WeatherRepository(weatherApiService)
-
         val factory = WeatherViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[WeatherViewModel::class.java]
 
-
-        // Observing LiveData for weather data
         viewModel.weatherData.observe(this) { data ->
-            // Update the UI with the weather data
-            if (data != null) {
-                val tempInKelvin = data.main.temp
-                val tempMaxInKelvin = data.main.temp_max
-                val tempMinInKelvin = data.main.temp_min
+            if (data == null) return@observe
 
-                val tempInFahrenheit = (tempInKelvin - 273.15) * 9/5 + 32
-                val tempMaxInFahrenheit = (tempMaxInKelvin - 273.15) * 9/5 + 32
-                val tempMinInFahrenheit = (tempMinInKelvin - 273.15) * 9/5 + 32
+            // The API returns Kelvin by default.
+            val tempInFahrenheit = (data.main.temp - 273.15) * 9 / 5 + 32
+            val tempMaxInFahrenheit = (data.main.temp_max - 273.15) * 9 / 5 + 32
+            val tempMinInFahrenheit = (data.main.temp_min - 273.15) * 9 / 5 + 32
 
-                currentTempTextView.text = String.format("%.1f°F", tempInFahrenheit)
-                highTempTextView.text = String.format("%.1f°F", tempMaxInFahrenheit)
-                lowTempTextView.text = String.format("%.1f°F", tempMinInFahrenheit)
-                weatherDetailsLayout.visibility = View.VISIBLE
+            currentTempTextView.text = String.format("%.1f°F", tempInFahrenheit)
+            highTempTextView.text = String.format("%.1f°F", tempMaxInFahrenheit)
+            lowTempTextView.text = String.format("%.1f°F", tempMinInFahrenheit)
+            weatherDetailsLayout.visibility = View.VISIBLE
+
+            val condition = data.weather.firstOrNull()
+            if (condition != null) {
+                descriptionTextView.text = condition.description
                 descriptionView.visibility = View.VISIBLE
-                descriptionTextView.text = data.weather[0].description
+
+                Glide.with(this)
+                    .load("https://openweathermap.org/img/wn/${condition.icon}@2x.png")
+                    .into(weatherIconImageView)
+                weatherIconImageView.visibility = View.VISIBLE
+            } else {
+                descriptionView.visibility = View.GONE
+                weatherIconImageView.visibility = View.GONE
             }
-            // Replace with your logic to get the weather icon URL
-            val weatherIconUrl = "https://cdn.iconscout.com/icon/free/png-512/free-weather-191-461610.png?f=webp&w=512"
-
-            // Use Glide to load the image into the ImageView
-            Glide.with(this)
-                .load(weatherIconUrl)
-                .into(weatherIconImageView)
-
-            weatherIconImageView.visibility = View.VISIBLE
         }
 
-        // Observing LiveData for errors
         viewModel.errorMessage.observe(this) { error ->
             Toast.makeText(this, error, Toast.LENGTH_SHORT).show()
         }
 
         searchButton.setOnClickListener {
-            displaySearchBox.text = cityEditText.text
-            displaySearchBox.visibility = View.VISIBLE
-
-            val city = cityEditText.text.toString()
+            val city = cityEditText.text.toString().trim()
             if (city.isNotEmpty()) {
-                // This fetchWeather method internally first fetches the geolocation for the city,
-                // and then fetches the weather data using that geolocation.
+                displaySearchBox.text = city
+                displaySearchBox.visibility = View.VISIBLE
+                saveLastSearchedCity(city)
                 viewModel.fetchWeather(city)
             }
         }
 
-        // Check for saved city name and fetch weather for it
-        val savedCity = getPreferences(Context.MODE_PRIVATE).getString("lastSearchedCity", "")
-        if (savedCity?.isNotEmpty() == true) {
-            // Display the last searched city in the displaySearchBox
+        if (savedCity.isNotEmpty()) {
             displaySearchBox.text = savedCity
             displaySearchBox.visibility = View.VISIBLE
             viewModel.fetchWeather(savedCity)
         } else {
-            // Use device location for initial weather load
             fetchWeatherUsingDeviceLocation()
         }
     }
 
     override fun onPause() {
         super.onPause()
-        val city = cityEditText.text.toString()
+        val city = cityEditText.text.toString().trim()
         if (city.isNotEmpty()) {
-            val sharedPref = getPreferences(Context.MODE_PRIVATE)
-            with(sharedPref.edit()) {
-                putString("lastSearchedCity", city)
-                apply()
-            }
+            saveLastSearchedCity(city)
         }
     }
 
-
     private fun getLastSearchedCity(): String {
-        return sharedPref.getString("LAST_SEARCHED_CITY", "") ?: ""
+        return sharedPref.getString(KEY_LAST_CITY, "") ?: ""
     }
 
+    private fun saveLastSearchedCity(city: String) {
+        sharedPref.edit().putString(KEY_LAST_CITY, city).apply()
+    }
+
+    // Either precise or approximate location is enough for a weather lookup.
+    private fun hasLocationPermission(): Boolean {
+        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED ||
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                PackageManager.PERMISSION_GRANTED
+    }
+
+    @SuppressLint("MissingPermission")
     private fun fetchWeatherUsingDeviceLocation() {
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!hasLocationPermission()) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
-                1
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
+                LOCATION_PERMISSION_REQUEST
             )
             return
         }
 
         fusedLocationClient.lastLocation.addOnSuccessListener { location ->
             location?.let {
-                Log.d("LOCATION_DEBUG", "Latitude: ${location.latitude}, Longitude: ${location.longitude}")
-                viewModel.fetchWeatherDevice(location.latitude, location.longitude)
+                viewModel.fetchWeatherDevice(it.latitude, it.longitude)
             } ?: run {
                 Log.d("LOCATION_DEBUG", "Location is null, requesting new location data.")
                 requestNewLocationData()
@@ -188,49 +172,48 @@ class SearchWeatherActivity : AppCompatActivity() {
         }
     }
 
-    // Handle the permissions result
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+        if (requestCode == LOCATION_PERMISSION_REQUEST) {
+            // Granting either precise or approximate location is fine.
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
                 fetchWeatherUsingDeviceLocation()
             } else {
-                // Permission was denied, handle accordingly.
-                Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Location permission denied. Search for a city instead.", Toast.LENGTH_SHORT).show()
             }
         }
     }
-    //
+
+    @SuppressLint("MissingPermission")
     private fun requestNewLocationData() {
+        if (!hasLocationPermission()) return
+
         val locationRequest = LocationRequest().apply {
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+            priority = LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY
             interval = 0
             fastestInterval = 0
             numUpdates = 1
         }
 
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            fusedLocationClient.requestLocationUpdates(
-                locationRequest,
-                object : LocationCallback() {
-                    override fun onLocationResult(locationResult: LocationResult?) {
-                        locationResult?.let {
-                            val lastLocation = it.lastLocation
-                            viewModel.fetchWeatherDevice(lastLocation.latitude, lastLocation.longitude)
-                        }
-                    }
-                },
-                Looper.myLooper()
-            )
-        }
+        fusedLocationClient.requestLocationUpdates(
+            locationRequest,
+            object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult?) {
+                    val lastLocation = locationResult?.lastLocation ?: return
+                    viewModel.fetchWeatherDevice(lastLocation.latitude, lastLocation.longitude)
+                }
+            },
+            Looper.getMainLooper()
+        )
     }
 
+    companion object {
+        private const val PREFS_NAME = "weather_app_prefs"
+        private const val KEY_LAST_CITY = "LAST_SEARCHED_CITY"
+        private const val LOCATION_PERMISSION_REQUEST = 1
+    }
 }

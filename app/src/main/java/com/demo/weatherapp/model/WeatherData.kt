@@ -1,16 +1,17 @@
 package com.demo.weatherapp.model
 
+// Gson ignores Kotlin nullability, so any field the API can leave out is declared nullable here.
 data class WeatherData(
     val coord: Coord,
     val weather: List<Weather>,
-    val base: String,
+    val base: String?,
     val main: Main,
-    val visibility: Int,
-    val wind: Wind,
-    val rain: Rain,
-    val clouds: Clouds,
+    val visibility: Int?,
+    val wind: Wind?,
+    val rain: Rain?,
+    val clouds: Clouds?,
     val dt: Long,
-    val sys: Sys,
+    val sys: Sys?,
     val timezone: Int,
     val id: Int,
     val name: String,
@@ -36,18 +37,18 @@ data class Main(
     val temp_max: Double,
     val pressure: Int,
     val humidity: Int,
-    val sea_level: Int,
-    val grnd_level: Int
+    val sea_level: Int?,
+    val grnd_level: Int?
 )
 
 data class Wind(
     val speed: Double,
-    val deg: Int,
-    val gust: Double
+    val deg: Int?,
+    val gust: Double?
 )
 
 data class Rain(
-    val `1h`: Double
+    val `1h`: Double?
 )
 
 data class Clouds(
@@ -55,18 +56,18 @@ data class Clouds(
 )
 
 data class Sys(
-    val type: Int,
-    val id: Int,
-    val country: String,
+    val type: Int?,
+    val id: Int?,
+    val country: String?,
     val sunrise: Long,
     val sunset: Long
 )
 
 data class GeoLocationResponse(
     val name: String,
-    val local_names: Map<String, String>,
+    val local_names: Map<String, String>?,
     val lat: Double,
     val lon: Double,
     val country: String,
-    val state: String
+    val state: String?
 )
